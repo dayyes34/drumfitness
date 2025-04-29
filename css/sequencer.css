@@ -1,0 +1,76 @@
+/* css/sequencer.css */
+.sequencer {
+    margin: 20px 0;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 15px;
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.sound-label {
+    width: 70px;
+    font-weight: bold;
+}
+
+.cells {
+    display: flex;
+    flex-grow: 1;
+}
+
+.cell {
+    height: 50px;
+    flex-grow: 1;
+    margin: 0 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.1s;
+}
+
+.cell:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.row[data-sound="kick"] .cell.active {
+    background-color: #FF5252;
+}
+
+.row[data-sound="snare"] .cell.active {
+    background-color: #4CAF50;
+}
+
+.row[data-sound="hihat"] .cell.active {
+    background-color: #2196F3;
+}
+
+.row[data-sound="cymbal"] .cell.active {
+    background-color: #FFC107;
+}
+
+.cell.current {
+    border: 2px solid #000;
+}
+
+.controls {
+    display: flex;
+    justify-content: center;
+    margin: 20px 0;
+    flex-wrap: wrap;
+}
+
+.tempo-control {
+    text-align: center;
+    margin: 20px 0;
+}
+
+#tempo {
+    width: 100%;
+    max-width: 300px;
+    margin-top: 10px;
+}

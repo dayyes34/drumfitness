@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Ритм-секвенсор</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 16px;
+            color: var(--tg-theme-text-color, #000);
+            background-color: var(--tg-theme-bg-color, #fff);
+        }
+        h1 {
+            font-size: 24px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .description {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .sequencer {
+            margin: 20px 0;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            background-color: rgba(0, 0, 0, 0.02);
+        }
+        .row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .sound-label {
+            width: 70px;
+            font-weight: bold;
+        }
+        .cells {
+            display: flex;
+            flex-grow: 1;
+        }
+        .cell {
+            height: 50px;
+            flex-grow: 1;
+            margin: 0 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.1s;
+        }
+        .cell:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+        .row[data-sound="kick"] .cell.active {
+            background-color: #FF5252;
+        }
+        .row[data-sound="snare"] .cell.active {
+            background-color: #4CAF50;
+        }
+        .row[data-sound="hihat"] .cell.active {
+            background-color: #2196F3;
+        }
+        .row[data-sound="cymbal"] .cell.active {
+            background-color: #FFC107;
+        }
+        .cell.current {
+            border: 2px solid #000;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        button {
+            background-color: var(--tg-theme-button-color, #2678b6);
+            color: var(--tg-theme-button-text-color, #fff);
+            border: none;
+            border-radius: 4px;
+            padding: 8px 16px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:active {
+            opacity: 0.8;
+        }
+        .tempo-control {
+            text-align: center;
+            margin: 20px 0;
+        }
+        #tempo {
+            width: 100%;
+            max-width: 300px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 id="exercise-name">Секвенсор</h1>
+        <p id="exercise-description" class="description"></p>
+
+        <div class="sequencer">
+            <div class="row" data-sound="kick">
+                <div class="sound-label">Бас</div>
+                <div class="cells">
+                    <div class="cell"></div>
+                    <div class="cell"></div>
+                    <div class="cell"></div>
+                    <div class="cell"></div>
+                </div>
+            </div>
+            <div class="row" data-sound="snare">
+                <div class="sound-label">Снейр</div>
+                <div class="cells">
+                    <div class="cell"></div>
+                    <div class="cell"></div>
+                    <div class="cell"></div>
+                    <div class="cell"></div>
+                </div>
+            </div>
+            <div class="row" data-sound="hihat">
+                <div class="sound-label">Хэт</div>
+                <div class="cells">
+                    <div class="cell"></div>
+                    <div class="cell"></div>
+                    <div class="cell"></div>
+                    <div class="cell"></div>
+                </div>
+            </div>
+            <div class="row" data-sound="cymbal">
+                <div class="sound-label">Тарелка</div>
+                <div class="cells">
+                    <div class="cell"></div>
+                    <div class="cell"></div>
+                    <div class="cell"></div>
+                    <div class="cell"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="play-btn">Играть</button>
+            <button id="stop-btn">Стоп</button>
+            <button id="clear-btn">Очистить</button>
+            <button id="save-btn">Сохранить</button>
+        </div>
+
+        <div class="tempo-control">
+            <label for="tempo">Темп: <span id="tempo-value">120</span> BPM</label>
+            <input type="range" id="tempo" min="60" max="180" value="120">
+        </div>
+    </div>
+
+    <script>
+        // Инициализация Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        // Базовый URL API (замените на ваш)
+        const API_URL = 'http://localhost:3000/api';
+
+        // Класс секвенсора
+        class RhythmSequencer {
+            constructor() {
+                // Данные секвенсора
+                this.sequencerData = {
+                    kick: [false, false, false, false],
+                    snare: [false, false, false, false],
+                    hihat: [false, false, false, false],
+                    cymbal: [false, false, false, false]
+                };
+
+                // Состояние воспроизведения
+                this.isPlaying = false;
+                this.currentStep = 0;
+                this.tempo = 120; // BPM
+                this.interval = null;
+
+                // Элементы интерфейса
+                this.rows = document.querySelectorAll('.row');
+                this.cells = document.querySelectorAll('.cell');
+                this.playBtn = document.getElementById('play-btn');
+                this.stopBtn = document.getElementById('stop-btn');
+                this.clearBtn = document.getElementById('clear-btn');
+                this.saveBtn = document.getElementById('save-btn');
+                this.tempoInput = document.getElementById('tempo');
+                this.tempoValue = document.getElementById('tempo-value');
+
+                // Данные упражнения
+                this.exerciseId = null;
+                this.exerciseName = document.getElementById('exercise-name');
+                this.exerciseDescription = document.getElementById('exercise-description');
+
+                // Инициализация обработчиков событий
+                this.initEventListeners();
+
+                // Загружаем данные упражнения, если есть ID в URL
+                const exerciseId = this.getUrlParam('id');
+                if (exerciseId) {
+                    this.loadExercise(exerciseId);
+                }
+            }
+
+            getUrlParam(param) {
+                const queryString = window.location.search;
+                const urlParams = new URLSearchParams(queryString);
+                return urlParams.get(param);
+            }
+
+            initEventListeners() {
+                // Обработчики для ячеек
+                this.cells.forEach(cell => {
+                    cell.addEventListener('click', () => {
+                        this.toggleCell(cell);
+                    });
+                });
+
+                // Кнопка воспроизведения
+                this.playBtn.addEventListener('click', () => {
+                    this.play();
+                });
+
+                // Кнопка остановки
+                this.stopBtn.addEventListener('click', () => {
+                    this.stop();
+                });
+
+                // Кнопка очистки
+                this.clearBtn.addEventListener('click', () => {
+                    this.clear();
+                });
+
+                // Кнопка сохранения
+                this.saveBtn.addEventListener('click', () => {
+                    this.saveToDatabase();
+                });
+
+                // Изменение темпа
+                this.tempoInput.addEventListener('input', () => {
+                    this.tempo = this.tempoInput.value;
+                    this.tempoValue.textContent = this.tempo;
+
+                    // Если воспроизведение активно, обновляем интервал
+                    if (this.isPlaying) {
+                        this.stop();
+                        this.play();
+                    }
+                });
+
+                // Кнопка назад в Telegram
+                if (tg.BackButton) {
+                    tg.BackButton.show();
+                    tg.BackButton.onClick(() => {
+                        window.location.href = 'index.html';
+                    });
+                }
+            }
+
+            toggleCell(cell) {
+                cell.classList.toggle('active');
+
+                // Находим индексы строки и ячейки
+                const row = cell.closest('.row');
+                const rowIndex = Array.from(this.rows).indexOf(row);
+                const cellIndex = Array.from(row.querySelectorAll('.cell')).indexOf(cell);
+
+                // Обновляем данные
+                const soundType = this.rows[rowIndex].getAttribute('data-sound');
+                this.sequencerData[soundType][cellIndex] = cell.classList.contains('active');
+            }
+
+            play() {
+                // Если уже воспроизводится, останавливаем
+                if (this.isPlaying) {
+                    this.stop();
+                    return;
+                }
+
+                this.isPlaying = true;
+                this.playBtn.textContent = 'Пауза';
+
+                // Вычисляем интервал шага в миллисекундах
+                const stepTime = (60 / this.tempo) * 1000 / 1; // Делим на 1, т.к. у нас четвертные ноты
+
+                // Запускаем интервал
+                this.currentStep = 0;
+                this.interval = setInterval(() => {
+                    this.playStep();
+                    this.currentStep = (this.currentStep + 1) % 4;
+                }, stepTime);
+            }
+
+            playStep() {
+                // Убираем класс текущего шага со всех ячеек
+                document.querySelectorAll('.cell.current').forEach(cell => {
+                    cell.classList.remove('current');
+                });
+
+                // Проходим по каждой строке
+                this.rows.forEach(row => {
+                    const soundType = row.getAttribute('data-sound');
+                    const cells = row.querySelectorAll('.cell');
+
+                    // Отмечаем текущий шаг
+                    cells[this.currentStep].classList.add('current');
+
+                    // Проверяем, нужно ли воспроизводить звук
+                    if (this.sequencerData[soundType][this.currentStep]) {
+                        this.playSound(soundType);
+                    }
+                });
+            }
+
+            playSound(soundType) {
+                // В простой версии просто логируем
+                console.log(`Playing ${soundType}`);
+
+                // Здесь можно добавить воспроизведение звука
+                try {
+                    const audio = new Audio(`${soundType}.mp3`);
+                    audio.play();
+                } catch (e) {
+                    console.log('Звук недоступен:', e);
+                }
+            }
+
+            stop() {
+                if (!this.isPlaying) return;
+
+                clearInterval(this.interval);
+                this.isPlaying = false;
+                this.playBtn.textContent = 'Играть';
+
+                // Убираем отметку текущего шага
+                document.querySelectorAll('.cell.current').forEach(cell => {
+                    cell.classList.remove('current');
+                });
+            }
+
+            clear() {
+                // Останавливаем воспроизведение, если активно
+                this.stop();
+
+                // Убираем активные ячейки
+                document.querySelectorAll('.cell.active').forEach(cell => {
+                    cell.classList.remove('active');
+                });
+
+                // Сбрасываем данные
+                for (const sound in this.sequencerData) {
+                    this.sequencerData[sound] = [false, false, false, false];
+                }
+            }
+
+            async loadExercise(exerciseId) {
+                try {
+                    const response = await fetch(`${API_URL}/exercises/${exerciseId}`);
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const exercise = await response.json();
+
+                    // Сохраняем ID упражнения
+                    this.exerciseId = exerciseId;
+
+                    // Обновляем заголовок и описание
+                    this.exerciseName.textContent = exercise.name;
+                    this.exerciseDescription.textContent = exercise.description || '';
+
+                    // Если у упражнения есть ритм, загружаем его
+                    if (exercise.rhythmData) {
+                        this.loadRhythmData(exercise.rhythmData);
+                    }
+                } catch (error) {
+                    console.error('Ошибка загрузки упражнения:', error);
+                    this.exerciseName.textContent = 'Ошибка загрузки упражнения';
+                }
+            }
+
+            loadRhythmData(rhythmData) {
+                // Обновляем внутренние данные
+                this.sequencerData = {...rhythmData};
+
+                // Обновляем отображение
+                this.rows.forEach(row => {
+                    const soundType = row.getAttribute('data-sound');
+                    const cells = row.querySelectorAll('.cell');
+
+                    if (this.sequencerData[soundType]) {
+                        this.sequencerData[soundType].forEach((isActive, index) => {
+                            if (isActive) {
+                                cells[index].classList.add('active');
+                            } else {
+                                cells[index].classList.remove('active');
+                            }
+                        });
+                    }
+                });
+            }
+
+            async saveToDatabase() {
+                if (!this.exerciseId) {
+                    tg.showAlert('Сначала выберите упражнение');
+                    return;
+                }
+
+                try {
+                    tg.MainButton.setText('Сохранение...');
+                    tg.MainButton.show();
+                    tg.MainButton.showProgress();
+
+                    const response = await fetch(`${API_URL}/save-rhythm`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            exerciseId: this.exerciseId,
+                            sequencerData: this.sequencerData
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+
+                    tg.MainButton.hideProgress();
+                    tg.MainButton.hide();
+
+                    if (result.success) {
+                        tg.showPopup({
+                            title: 'Успешно',
+                            message: 'Ритм сохранен в базе данных',
+                            buttons: [{ type: 'ok' }]
+                        });
+                    } else {
+                        throw new Error(result.error || 'Ошибка при сохранении');
+                    }
+                } catch (error) {
+                    tg.MainButton.hideProgress();
+                    tg.MainButton.hide();
+                    tg.showAlert(`Ошибка: ${error.message}`);
+                }
+            }
+        }
+
+        // Инициализация секвенсора при загрузке страницы
+        document.addEventListener('DOMContentLoaded', () => {
+            new RhythmSequencer();
+        });
+    </script>
+</body>
+</html>
